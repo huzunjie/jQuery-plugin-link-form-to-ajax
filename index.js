@@ -11,7 +11,7 @@
 *       提交成功 submit_success (这里的success 标识error_code == 0，非0会触发submit_error)
 *       提交失败 submit_error   (包含HTTP异常和error_code非0的情况)
 *
-* 另外，被劫持的表单子元素自动支持联动功能（实现表单值变化后UI跟着变）：
+* 另外，被劫持的表单子元素自动支持联动功能（实现表单值变化后UI跟着变），对于不劫持ajax请求的表单，可以$('form').linkageForm()启用联动逻辑：
 *   当带有data-is-linkage的元素发生value变化的时候，按当前元素name查找关联元素进行显示隐藏，并对关联元素内的表单进行disabled处理
 *   关联示例：
 *    <select name="type" data-is-linkage>
@@ -39,7 +39,21 @@
 (function(){
 
     function _data_bind_ui($wrap, selector, isShow, isDisabled){
-        $wrap.find(selector)[isShow?'show':'hide']().find('select,input,textarea').prop('disabled', isDisabled);
+        var $box = $wrap.find(selector);
+        $box.each(function(i, bel){
+            var $bel = $(bel);
+            var act = $bel.data('linkage-act')||'disabled'; //'disabled' || 'readonly', default is 'disabled';
+            var isReadOnly = act=='readonly';
+
+            $bel[isReadOnly||isShow?'show':'hide']()
+            var $ipt = $bel.find('select,input,textarea');
+            if(isDisabled){
+                $ipt.attr(act, isDisabled)
+            }else{
+                $ipt.removeAttr(act);
+            }
+            $ipt.prop(act, isDisabled).css({ 'pointer-events': isDisabled?'none':'auto' });
+        })
     }
     function _is_checkbox_or_radio($el){
         return /(checkbox|radio)/.test($el.attr('type'));
@@ -323,7 +337,7 @@
 
                 val = (''+val).replace(/"/g,"\\\"");
 
-                //console.log(this.type, name, 'data-is-linkage', val);
+                // console.log(this.type, name, 'data-is-linkage', val);
                 // 展示联动
                 $wrap.find('[data-bind="'+name+'"]').text(val);
 
