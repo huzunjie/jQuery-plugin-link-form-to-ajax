@@ -193,14 +193,15 @@
             var node = ret;
             $.each(key_route_arr, function(i, k){
                 var arr_keys = reg_arr_keys.exec(k);
+                var is_last_key = key_route_max == i;
                 if(arr_keys){
                     arr_keys = [arr_keys[1]].concat(arr_keys[2].split(']['));
                     arr_key_max = arr_keys.length-1;
                     $.each(arr_keys, function(j, k){
-                        node = node[k] = node[k] || (j == arr_key_max?{}:[]);
+                        node = node[k] = node[k] || (j == arr_key_max?is_last_key?val:{}:[]);
                     });
                 }else{
-                    if(key_route_max == i){
+                    if(is_last_key){
                         if(node[k]==undefined){
                             node[k] = val;
                         }else{
