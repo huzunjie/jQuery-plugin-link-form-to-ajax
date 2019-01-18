@@ -38,27 +38,6 @@
 * ======================================================================== */
 (function(){
 
-    function _data_bind_ui($wrap, selector, isShow, isDisabled){
-        var $box = $wrap.find(selector);
-        $box.each(function(i, bel){
-            var $bel = $(bel);
-            var act = $bel.data('linkage-act')||'disabled'; //'disabled' || 'readonly', default is 'disabled';
-            var isReadOnly = act=='readonly';
-
-            $bel[isReadOnly||isShow?'show':'hide']()
-            var $ipt = $bel.find('select,input,textarea');
-            if(isDisabled){
-                $ipt.attr(act, isDisabled)
-            }else{
-                $ipt.removeAttr(act);
-            }
-            $ipt.prop(act, isDisabled).css({ 'pointer-events': isDisabled?'none':'auto' });
-        })
-    }
-    function _is_checkbox_or_radio($el){
-        return /(checkbox|radio)/.test($el.attr('type'));
-    }
-
     function submit2ajax(elEvent){
 
         var tagName = this.tagName;
@@ -236,6 +215,23 @@
                     }
                 }
             });
+        },
+        _data_bind_ui = function ($wrap, selector, isShow, isDisabled){
+            var $box = $wrap.find(selector);
+            $box.each(function(i, bel){
+                var $bel = $(bel);
+                var act = $bel.data('linkage-act')||'disabled'; //'disabled' || 'readonly', default is 'disabled';
+                var isReadOnly = act=='readonly';
+
+                $bel[isReadOnly||isShow?'show':'hide']()
+                var $ipt = $bel.find('select,input,textarea');
+                if(isDisabled){
+                    $ipt.attr(act, isDisabled)
+                }else{
+                    $ipt.removeAttr(act);
+                }
+                $ipt.prop(act, isDisabled).css({ 'pointer-events': isDisabled?'none':'auto' });
+            })
         };
     // 附赠几个表单相关的扩展功能
     $.fn.extend({
@@ -279,7 +275,7 @@
                 var sepa = $el.getArrSeparator();
                 var realVal = sepa?(val+'').split(sepa):val;
                 // 区别对待单选框和复选框
-                if( _is_checkbox_or_radio($el) ){
+                if( reg_checkbox.test($el.attr('type')) ){
                     $el.each(function(i, ipt){
                         var $ipt = $(ipt), _val = $ipt.val();
                         $ipt.prop('checked', sepa?$.inArray(_val, realVal)!=-1: (_val == realVal));
@@ -342,7 +338,7 @@
                 // 联动表单发生change事件时，同步更新关联DOM状态
                 var $ipt = $(this),
                     name = $ipt.attr('name'), 
-                    val = _is_checkbox_or_radio($ipt)?
+                    val = reg_checkbox.test($ipt.attr('type'))?
                         $.makeArray($wrap.find('[name="'+name+'"]:checked').map(function(i, ipt){
                             return $(ipt).val();
                         })).join()
