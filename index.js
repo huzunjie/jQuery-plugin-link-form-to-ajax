@@ -204,49 +204,63 @@
         return false;
     }
 
-    // 附赠几个表单相关的扩展功能
-    $.fn.extend({
-        // 格式化表单数据为JSON
-        serializeJSON: function(){
-            var $from = $(this), ret = {};
-            $.each($from.serializeArray(), function(_, item){
-                var name = item.name, val = item.value;
-                if(ret[name]==undefined){
-                    ret[name] = val;
+    var reg_rrn = /\r?\n/g,
+        rn_fn = function(val) { return val.replace(reg_rrn, "\r\n") },
+        reg_btn_type = /^(?:submit|button|image|reset|file)$/i,
+        reg_checkbox = /^(?:checkbox|radio)$/i,
+        reg_arr_keys = /^([^\[]*)\[(.+)\]$/,
+        setRet = function(ret, key_route, val){
+            var key_route_arr = key_route.split('.'), key_route_max = key_route_arr.length-1;
+            var node = ret;
+            $.each(key_route_arr, function(i, k){
+                var arr_keys = reg_arr_keys.exec(k);
+                if(arr_keys){
+                    arr_keys = [arr_keys[1]].concat(arr_keys[2].split(']['));
+                    arr_key_max = arr_keys.length-1;
+                    $.each(arr_keys, function(j, k){
+                        node = node[k] = node[k] || (j == arr_key_max?{}:[]);
+                    });
                 }else{
-                    if($.type(ret[name])=="array"){
-                        ret[name].push(val);
+                    if(key_route_max == i){
+                        if(node[k]==undefined){
+                            node[k] = val;
+                        }else{
+                            if($.type(node[k])=="array"){
+                                node[k].push(val);
+                            }else{
+                                node[k] = [node[k], val];
+                            }
+                        }
                     }else{
-                        ret[name] = [ret[name], val];
+                        node = node[k] = node[k] || {};
                     }
                 }
             });
+        };
+    // 附赠几个表单相关的扩展功能
+    $.fn.extend({
 
-            // 对取得的表单数据二次加工
-            $.each(ret,function(key, val){
+        // 格式化表单数据为JSON
+        serializeJSON: function(){
+            var ret = {}, _arr2strkeys = {};
+            this.find('input,select,textarea').each(function() {
+                var el = this, $el = $(el), _type = el.type, _key = el.name, val = $el.val();
 
-                // 支持在多选框上设置 arr_separator 来指定序列化分隔符
-                var sepa = $from.getFieldArrSeparator(key);
-                if(!!sepa){
-                    ret[key] = $.type(val)=="array"?val.join(sepa):val;
-                }
+                if(null == val || !_key || el.disabled || reg_btn_type.test(_type) || (!el.checked && reg_checkbox.test(_type))) return;
 
-                // 支持通过表单属性声明命名空间
-                var _namespace = $from.find('[name="'+key+'"]').data('namespace');
-                if(_namespace){
-                    delete ret[key];
-                    key = _namespace+'.'+key;
-                }
-
-                // Namespace to JSON
-                var keys = key.split('.'),  maxI = keys.length-1;
-                if(maxI){
-                    delete ret[key];
-                    var child = ret;
-                    $.each(keys, function(i, k){
-                        child[k] = i!=maxI?(child[k]||{}):val;
-                        child = child[k]||{};
-                    });
+                var _ns = $el.data('namespace');
+                if(_ns) _key = _ns + '.' + _key;
+                _arr2strkeys[_key] = $el.getArrSeparator();
+                val = $.isArray(val)? $.map(val, rn_fn) : rn_fn(val);
+                setRet(ret, _key, val);
+            });
+            // 二次加工一下成品数据
+            $.each(ret, function(k, v){
+                if($.type(v)=="array"){
+                    v =  $.map(v, function(i){ return i });
+                    var as = _arr2strkeys[k];
+                    if(as) v = v.join(as); // 支持UI上设置 data-arr_separator 来将数组值转为字符串
+                    ret[k] = v;
                 }
             });
             return ret;
@@ -262,7 +276,7 @@
                 if($el.length==0){
                     $el = $from.find("[name='"+key+"']");
                 }
-                var sepa = $from.getFieldArrSeparator(key, $el);
+                var sepa = $el.getArrSeparator();
                 var realVal = sepa?(val+'').split(sepa):val;
                 // 区别对待单选框和复选框
                 if( _is_checkbox_or_radio($el) ){
@@ -351,6 +365,48 @@
             });
             return $wrap;
         },
+
+        /* 动态化容器内的行(支持用户手动添加移除行) 依赖 $.tmpl 插件
+        *  1. 为当前节点内带有 data-add-row 属性的DOM元素增加添加行功能，添加的行到 data-add-row 的值对应的列表容器元素内，添加的行模板使用列表容器上的data-tmpl属性对应的模板容器内容。
+        *  2. 为当前节点内带有 data-del-row 属性的DOM元素增加删除行功能，删除的行 closest 检索 data-add-row 的值对应的节点元素。
+        *  示例：
+        *    <div data-tmpl="#item_line_tmpl"></div>
+        *    <script>
+        *        var $box = $('[data-tmpl="#item_line_tmpl"]');
+        *        var defLine = $.tmpl($('#item_line_tmpl').html(), { _index:1 });
+        *        $box.append( defLine ).dynamicRow()
+        *    </script>
+        *    <script type="text/tmpl" id="item_line_tmpl">
+        *        <div class="underline p-10">
+        *            <div class="form-group">行{$_index}：</div>
+        *            <div class="form-group m-r-10">
+        *                <label class="control-label f-w-400">字段1</label>
+        *                <input type="text" class="form-control" name="data[{$_index}].f1" />
+        *            </div>              
+        *            <div class="form-group m-r-10">
+        *                <label class="control-label f-w-400">字段2</label>
+        *                <input type="text" class="form-control" name="data[{$_index}].f2" />
+        *            </div>
+        *            <div class="form-group">
+        *                {$_index==1?'<a data-add-row="[data-tmpl=\'#item_line_tmpl\']" class="btn btn-default btn-icon btn-circle fa fa-plus"></a>':'<a data-del-row=".underline" class="btn btn-default btn-icon btn-circle fa fa-trash"></a>'}
+        *            </div>
+        *        </div>
+        *    </script>
+        */
+        dynamicRow(){
+            return this.on('click', '[data-add-row]', function () {
+                var $btn = $(this);
+                var $rowBox = $btn.closest($btn.data('add-row'));
+                var tmplSelector = $rowBox.data('tmpl');
+                if(!tmplSelector) return alert('[data-add-row] 关联的容器缺少 [data-tmpl] 属性配置，无法匹配新建行模板。');
+                var lastIndex = 1+($rowBox.data('last-index') || $rowBox.children().length);
+                $rowBox.append( $.tmpl($(tmplSelector).html(), { _index: lastIndex }) ).data('last-index', lastIndex);
+            }).on('click', '[data-del-row]', function () {
+                var $btn = $(this);
+                $btn.closest($btn.data('del-row')).remove();
+            });
+        },
+
         // 表单重置
         resetForm: function(){
             var _this = this, formEl = _this[0];
@@ -360,8 +416,8 @@
             return _this;
         },
 
-        getFieldArrSeparator: function(key, $el){
-            return ($el||$(this).find("[name='"+key+"']")).data('arr_separator');
+        getArrSeparator: function(){
+            return this.data('arr_separator');
         }
     });
 
